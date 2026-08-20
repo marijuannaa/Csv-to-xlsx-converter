@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusursuz Çoklu CSV Dönüştürücü</title>
+    <title>Çoklu CSV Dönüştürücü</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
         .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
@@ -24,7 +24,7 @@
 <body>
 
     <h2>Çoklu CSV Dönüştürücü</h2>
-    <p>Bilimsel sayıları (e+002) düzeltir ve sütunları (A ve B) kesinlikle birbirinden ayırır.<br>
+    <p>Bilimsel sayıları (e+002) düzeltir ve sütunları (A ve B) birbirinden ayırır.<br>
     İçerideki <b>;</b> karakterlerini <b>,</b> yapar; <b>,</b> karakterlerini ise <b>.</b> yapar.</p>
 
     <div class="box" onclick="document.getElementById('fileInput').click()">
@@ -47,16 +47,14 @@
                 let num = Number(trimmed);
                 if (!isNaN(num) && isFinite(num)) {
                     let parts = trimmed.toLowerCase().split('e');
-                    let exponent = parseInt(parts[1], 10);
-                    let decimalPlaces = parts[0].includes('.') ? parts[0].split('.')[1].length : 0;
+                    let exponent = parseInt(parts, 10);
+                    let decimalPlaces = parts.includes('.') ? parts.split('.').length : 0;
                     
-                    // Gereksiz küsurat oluşmasını engelleyen basamak hassasiyeti
                     let targetPrecision = Math.max(0, decimalPlaces - exponent);
                     let fixedNum = num.toFixed(targetPrecision);
                     
-                    // Orijinalindeki sıfır koruma mantığı (Örn: 8.305560 için sondaki 0'ı korur)
                     if (fixedNum.indexOf('.') !== -1 && targetPrecision > 0) {
-                        let currentDecimals = fixedNum.split('.')[1].length;
+                        let currentDecimals = fixedNum.split('.').length;
                         if (currentDecimals < targetPrecision) {
                             fixedNum = fixedNum.padEnd(fixedNum.length + (targetPrecision - currentDecimals), '0');
                         }
@@ -65,9 +63,8 @@
                 }
             }
             
-            // Kullanıcının hücre içi karakter dönüşüm kuralı: virgüller nokta olsun
+            // Kullanıcının hücre içi karakter dönüşüm kuralları
             trimmed = trimmed.replace(/,/g, '.');
-            // Hücre içinde kalmış olabilecek noktalı virgüller virgül olsun
             trimmed = trimmed.replace(/;/g, ',');
             
             return trimmed;
@@ -90,41 +87,35 @@
                     let rawContent = event.target.result;
                     let lines = rawContent.split(/\r?\n/);
                     
-                    // 1. ADIM: Orijinal dosyanın ayırıcısını (Delimiter) akıllıca tespit et
+                    // Orijinal dosyanın ayırıcısını (Delimiter) tespit etme
                     let sample = lines.slice(0, 5).join('\n');
-                    let detectedDelimiter = ","; // varsayılan
+                    let detectedDelimiter = ","; 
                     
                     if ((sample.split('\t').length - 1) > (sample.split(';').length - 1) && (sample.split('\t').length - 1) > (sample.split(',').length - 1)) {
-                        detectedDelimiter = "\t"; // Sekme ayrımı var
+                        detectedDelimiter = "\t"; 
                     } else if ((sample.split(';').length - 1) > (sample.split(',').length - 1)) {
-                        detectedDelimiter = ";"; // Noktalı virgül ayrımı var
+                        detectedDelimiter = ";"; 
                     }
 
                     let processedLines = [];
 
-                    // 2. ADIM: Satır satır ve sütun sütun işle
+                    // Satır satır ve sütun sütun işleme
                     for (let i = 0; i < lines.length; i++) {
                         let currentLine = lines[i];
                         if (currentLine.trim() === "") continue;
 
-                        // Satırı tespit edilen ayırıcıya göre bölüyoruz
                         let columns = currentLine.split(detectedDelimiter);
-
-                        // Her bir hücreyi bağımsız olarak temizliyoruz
                         let processedColumns = columns.map(cell => processCell(cell));
 
-                        // Sütunları birbirine bağlarken KESİNLİKLE YENİ AYIRICI OLARAK VİRGÜL (,) kullanıyoruz
-                        // Çünkü ";ler , olacak" kuralı gereği artık yeni sütun ayırıcımız virgüldür.
+                        // Sütunları virgül (,) ile birleştiriyoruz
                         processedLines.push(processedColumns.join(','));
                     }
 
-                    // 3. ADIM: Excel Kilidi (sep=,)
-                    // Excel'in bu dosyayı açtığında virgülleri (,) kesinlikle sütun ayırıcı olarak
-                    // algılamasını sağlamak için dosyanın en başına bu komutu ekliyoruz.
-                    let content = "sep=,\n" + processedLines.join('\n');
+                    // "sep=," satırı tamamen kaldırıldı, veri doğrudan ilk satırdan başlıyor
+                    let content = processedLines.join('\n');
 
-                    // Dosya oluşturma
-                    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                    // Dosya oluşturma (UTF-8 BOM ekleyerek Excel'in Türkçe karakterleri ve sütunları doğrudan tanımasını kolaylaştırıyoruz)
+                    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     processedFiles.push({ url: url, name: "donusturulmus_" + file.name });
 
