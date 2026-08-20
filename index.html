@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çoklu CSV Dönüştürücü (Sütun Korumalı)</title>
+    <title>Gelişmiş CSV Dönüştürücü</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
         .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
@@ -24,42 +24,44 @@
 <body>
 
     <h2>Çoklu CSV Dönüştürücü</h2>
-    <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b>; eski <b>,</b> karakterlerini ise <b>.</b> yapar.<br>
-    Sütun düzenini bozmadan <b>bilimsel sayıları</b> normal formata getirir.</p>
+    <p>Sütun yapısını bozmadan bilimsel sayıları (e+002) temiz bir sayı formatına çevirir.<br>
+    Ardından <b>;</b> karakterlerini <b>,</b>; eski <b>,</b> karakterlerini ise <b>.</b> yapar.</p>
 
     <div class="box" onclick="document.getElementById('fileInput').click()">
         <p>CSV dosyalarını seçmek için tıklayın<br><small style="color: #666;">(Birden fazla dosya seçebilirsiniz)</small></p>
         <input type="file" id="fileInput" accept=".csv,.txt" multiple style="display:none">
     </div>
 
-    <!-- Yüklenen dosyaların görüneceği kavisli kareler -->
     <div class="file-list" id="fileList"></div>
-
-    <!-- Hepsini tek seferde indirecek buton -->
     <button id="downloadAllBtn" class="btn">Hepsini İndir</button>
 
     <script>
         let processedFiles = [];
 
-        // Bilimsel sayıları sütunları bozmayacak şekilde (saf metin olarak) dönüştüren fonksiyon
-        function convertScientificNotation(text) {
-            // Bilimsel gösterim desenini bulur (Örn: 5.992711e+002)
-            const scientificRegex = /[-+]?[0-9]*\.?[0-9]+[eE][-+]?[0-9]+/g;
-            
-            return text.replace(scientificRegex, function(match) {
-                const num = Number(match);
+        // Tek bir hücredeki bilimsel sayıyı alan ve hassasiyet kaybını (artık sayıları) önleyerek düzelten fonksiyon
+        function cleanAndConvertCell(cellValue) {
+            let trimmed = cellValue.trim();
+            // Hücre e+ veya e- içeren bir bilimsel sayı kalıbına uyuyor mu kontrol et
+            if (/^[-+]?[0-9]*\.?[0-9]+[eE][-+]?[0-9]+$/.test(trimmed)) {
+                let num = Number(trimmed);
                 if (!isNaN(num) && isFinite(num)) {
-                    //toFixed(20) ile sayıyı noktadan sonra maksimum 20 basamağa açıyoruz
-                    let fixedNum = num.toFixed(20);
+                    // Bilimsel ifadedeki e+002 kısmından üssü (2) alıyoruz
+                    let parts = trimmed.toLowerCase().split('e');
+                    let exponent = parseInt(parts[1], 10);
                     
-                    // Sayının sonundaki gereksiz sıfırları ve kalırsa noktayı temizliyoruz
-                    if (fixedNum.indexOf('.') !== -1) {
-                        fixedNum = fixedNum.replace(/\.?0+$/, "");
+                    // Orijinal sayının noktadan sonra kaç basamağı olduğunu buluyoruz (Örn: 5.992711 için 6 basamak)
+                    let decimalPlaces = 0;
+                    if (parts[0].includes('.')) {
+                        decimalPlaces = parts[0].split('.')[1].length;
                     }
-                    return fixedNum;
+                    
+                    // Yeni basamak hassasiyetini hesapla (böylece arkada hayali 0000046748 gibi sayılar oluşmaz)
+                    let targetPrecision = Math.max(0, decimalPlaces - exponent);
+                    
+                    return num.toFixed(targetPrecision);
                 }
-                return match;
-            });
+            }
+            return cellValue; // Bilimsel sayı değilse hücreye dokunma
         }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -76,24 +78,43 @@
                 const reader = new FileReader();
                 
                 reader.onload = function(event) {
-                    let content = event.target.result;
+                    let rawContent = event.target.result;
+                    
+                    // Satır satır bölüyoruz
+                    let lines = rawContent.split(/\r?\n/);
+                    let processedLines = [];
 
-                    // 1. Adım: Bilimsel sayıları saf metin olarak genişlet (Araya hiç virgül karışmaz)
-                    content = convertScientificNotation(content);
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].trim() === "") {
+                            processedLines.push("");
+                            continue;
+                        }
 
-                    // 2. Adım: Karakter dönüşüm mantığı (; -> , ve , -> .)
+                        // Sütunları ayırıyoruz (Orijinal ayırıcıyı korumak için önce ; kontrolü yapıyoruz)
+                        let delimiter = lines[i].includes(';') ? ';' : ',';
+                        let columns = lines[i].split(delimiter);
+
+                        // Sadece ilgili hücrelerdeki bilimsel gösterimleri temizle
+                        let processedColumns = columns.map(cell => cleanAndConvertCell(cell));
+
+                        // Sütunları bozmadan orijinal ayırıcısıyla geri birleştir
+                        processedLines.push(processedColumns.join(delimiter));
+                    }
+
+                    // Tüm satırları birleştirerek tek bir metin haline getiriyoruz
+                    let content = processedLines.join('\n');
+
+                    // Karakter dönüşüm mantığı (; -> , ve , -> .)
                     content = content.replace(/,/g, '[TEMP_COMMA]');
                     content = content.replace(/;/g, ',');
                     content = content.replace(/\[TEMP_COMMA\]/g, '.');
 
-                    // Dosya indirme URL'si oluşturma
+                    // Dosya indirme işlemi
                     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
-                    const newFileName = "donusturulmus_" + file.name;
+                    processedFiles.push({ url: url, name: "donusturulmus_" + file.name });
 
-                    processedFiles.push({ url: url, name: newFileName });
-
-                    // Arayüze kart ekleme
+                    // Arayüz kartı ekleme
                     const card = document.createElement('div');
                     card.className = 'file-card';
                     card.innerHTML = `
@@ -111,7 +132,6 @@
             });
         });
 
-        // "Hepsini İndir" butonu tetikleyicisi
         document.getElementById('downloadAllBtn').addEventListener('click', function() {
             processedFiles.forEach((fileInfo, index) => {
                 setTimeout(() => {
