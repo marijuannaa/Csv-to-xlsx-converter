@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çoklu CSV Dönüştürücü</title>
+    <title>Çoklu CSV Karakter Dönüştürücü</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
         .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
@@ -23,59 +23,24 @@
 </head>
 <body>
 
-    <h2>Çoklu CSV Dönüştürücü</h2>
-    <p>Bilimsel sayıları (e+002) düzeltir ve sütunları (A ve B) birbirinden ayırır.<br>
-    İçerideki <b>;</b> karakterlerini <b>,</b> yapar; <b>,</b> karakterlerini ise <b>.</b> yapar.</p>
+    <h2>Çoklu CSV Karakter Dönüştürücü</h2>
+    <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b> karakterine; <b>,</b> karakterlerini ise <b>.</b> karakterine dönüştürür.</p>
 
+    <!-- Çoklu dosya seçimi için "multiple" özelliği eklendi -->
     <div class="box" onclick="document.getElementById('fileInput').click()">
         <p>CSV dosyalarını seçmek için tıklayın<br><small style="color: #666;">(Birden fazla dosya seçebilirsiniz)</small></p>
         <input type="file" id="fileInput" accept=".csv,.txt" multiple style="display:none">
     </div>
 
+    <!-- Yüklenen dosyaların görüneceği kavisli kareler -->
     <div class="file-list" id="fileList"></div>
+
+    <!-- Hepsini tek seferde indirecek buton -->
     <button id="downloadAllBtn" class="btn">Hepsini İndir</button>
 
     <script>
+        // Dönüştürülen dosyaların indirme linklerini ve isimlerini tutacak dizi
         let processedFiles = [];
-
-        // Hücre içindeki bilimsel sayıları ondalık kısımlarını bozmadan çözen fonksiyon
-        function processCell(cellValue) {
-            let trimmed = cellValue.trim();
-            
-            // Eğer hücre tam bir bilimsel sayı formatındaysa (Örn: 5.992711e+002)
-            if (/^[-+]?[0-9]*\.?[0-9]+[eE][-+]?[0-9]+$/.test(trimmed)) {
-                let num = Number(trimmed);
-                if (!isNaN(num) && isFinite(num)) {
-                    let parts = trimmed.toLowerCase().split('e');
-                    let exponent = parseInt(parts[1], 10);
-                    
-                    // Ondalık hane sayısını doğru bulmak için noktadan sonrasını alıyoruz
-                    let decimalPlaces = 0;
-                    if (parts[0].includes('.')) {
-                        decimalPlaces = parts[0].split('.')[1].length;
-                    }
-                    
-                    // Ondalık kısmın silinmesini engelleyen net hedef basamak hesabı
-                    let targetPrecision = Math.max(0, decimalPlaces - exponent);
-                    let fixedNum = num.toFixed(targetPrecision);
-                    
-                    // Eğer sayı ondalıklıysa ve eksik sıfır varsa sonuna tamamlar (8.305560 koruması)
-                    if (fixedNum.indexOf('.') !== -1 && targetPrecision > 0) {
-                        let currentDecimals = fixedNum.split('.')[1].length;
-                        if (currentDecimals < targetPrecision) {
-                            fixedNum = fixedNum.padEnd(fixedNum.length + (targetPrecision - currentDecimals), '0');
-                        }
-                    }
-                    trimmed = fixedNum;
-                }
-            }
-            
-            // Sizin istediğiniz karakter dönüşüm kuralları:
-            trimmed = trimmed.replace(/,/g, '.');
-            trimmed = trimmed.replace(/;/g, ',');
-            
-            return trimmed;
-        }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const files = e.target.files;
@@ -84,48 +49,31 @@
             const fileListContainer = document.getElementById('fileList');
             const downloadAllBtn = document.getElementById('downloadAllBtn');
             
+            // Yeni yüklemede listeyi temizle
             fileListContainer.innerHTML = "";
             processedFiles = [];
 
+            // Seçilen her bir dosyayı sırayla işle
             Array.from(files).forEach(file => {
                 const reader = new FileReader();
                 
                 reader.onload = function(event) {
-                    let rawContent = event.target.result;
-                    let lines = rawContent.split(/\r?\n/);
-                    
-                    // Orijinal dosyanın ayırıcısını (Delimiter) tespit etme
-                    let sample = lines.slice(0, 5).join('\n');
-                    let detectedDelimiter = ","; 
-                    
-                    if ((sample.split('\t').length - 1) > (sample.split(';').length - 1) && (sample.split('\t').length - 1) > (sample.split(',').length - 1)) {
-                        detectedDelimiter = "\t"; 
-                    } else if ((sample.split(';').length - 1) > (sample.split(',').length - 1)) {
-                        detectedDelimiter = ";"; 
-                    }
+                    let content = event.target.result;
 
-                    let processedLines = [];
+                    // İlk koddaki dönüşüm mantığı
+                    content = content.replace(/,/g, '[TEMP_COMMA]');
+                    content = content.replace(/;/g, ',');
+                    content = content.replace(/\[TEMP_COMMA\]/g, '.');
 
-                    // Satır satır ve sütun sütun işleme
-                    for (let i = 0; i < lines.length; i++) {
-                        let currentLine = lines[i];
-                        if (currentLine.trim() === "") continue;
-
-                        let columns = currentLine.split(detectedDelimiter);
-                        let processedColumns = columns.map(cell => processCell(cell));
-
-                        // Sütunların arasına yapışma olmasın diye yeni standart CSV ayırıcısı olan virgülü koyuyoruz
-                        processedLines.push(processedColumns.join(','));
-                    }
-
-                    let content = processedLines.join('\n');
-
-                    // Bozuk karakterlere yol açan tüm eklemeleri kaldırdık, saf metin olarak kaydediyoruz
+                    // Dosya için indirme URL'si oluşturma
                     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
-                    processedFiles.push({ url: url, name: "donusturulmus_" + file.name });
+                    const newFileName = "donusturulmus_" + file.name;
 
-                    // Görsel Kart
+                    // Listeye eklemek üzere veriyi sakla
+                    processedFiles.push({ url: url, name: newFileName });
+
+                    // Arayüze kavisli kare (kart) ekleme
                     const card = document.createElement('div');
                     card.className = 'file-card';
                     card.innerHTML = `
@@ -134,6 +82,7 @@
                     `;
                     fileListContainer.appendChild(card);
 
+                    // En az bir dosya işlendiyse indirme butonunu göster
                     if (processedFiles.length > 0) {
                         downloadAllBtn.style.display = 'inline-block';
                     }
@@ -143,8 +92,10 @@
             });
         });
 
+        // "Hepsini İndir" butonuna tıklandığında çalışan fonksiyon
         document.getElementById('downloadAllBtn').addEventListener('click', function() {
             processedFiles.forEach((fileInfo, index) => {
+                // Tarayıcıların ardışık indirmeleri engellememesi için küçük bir zaman gecikmesi (delay) ekliyoruz
                 setTimeout(() => {
                     const a = document.createElement('a');
                     a.href = fileInfo.url;
@@ -152,7 +103,7 @@
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-                }, index * 250);
+                }, index * 250); // Her dosya arasında 0.25 saniye bekler
             });
         });
     </script>
