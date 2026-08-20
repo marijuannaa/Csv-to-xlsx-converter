@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çoklu CSV Karakter ve Sayı Dönüştürücü</title>
+    <title>Çoklu CSV Dönüştürücü (Sütun Korumalı)</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
         .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
@@ -25,7 +25,7 @@
 
     <h2>Çoklu CSV Dönüştürücü</h2>
     <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b>; eski <b>,</b> karakterlerini ise <b>.</b> yapar.<br>
-    Ayrıca <b>5.992711e+002</b> tarzı bilimsel sayıları normal sayı formatına dönüştürür.</p>
+    Sütun düzenini bozmadan <b>bilimsel sayıları</b> normal formata getirir.</p>
 
     <div class="box" onclick="document.getElementById('fileInput').click()">
         <p>CSV dosyalarını seçmek için tıklayın<br><small style="color: #666;">(Birden fazla dosya seçebilirsiniz)</small></p>
@@ -41,17 +41,22 @@
     <script>
         let processedFiles = [];
 
-        // Bilimsel gösterimli sayıları tespit edip normal sayıya çeviren yardımcı fonksiyon
+        // Bilimsel sayıları sütunları bozmayacak şekilde (saf metin olarak) dönüştüren fonksiyon
         function convertScientificNotation(text) {
-            // E-notasyonu kalıbını arayan düzenli ifade (Örn: 5.99e+02, -1.2e-3 vb.)
+            // Bilimsel gösterim desenini bulur (Örn: 5.992711e+002)
             const scientificRegex = /[-+]?[0-9]*\.?[0-9]+[eE][-+]?[0-9]+/g;
             
             return text.replace(scientificRegex, function(match) {
                 const num = Number(match);
-                // Eğer dönüştürülen değer geçerli bir sayıysa ve sonsuz değilse düz metne çevirir
                 if (!isNaN(num) && isFinite(num)) {
-                    // Javascript'in büyük/küçük sayılarda tekrar e+ yazmasını engellemek için doğrudan string kontrolü
-                    return num.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+                    //toFixed(20) ile sayıyı noktadan sonra maksimum 20 basamağa açıyoruz
+                    let fixedNum = num.toFixed(20);
+                    
+                    // Sayının sonundaki gereksiz sıfırları ve kalırsa noktayı temizliyoruz
+                    if (fixedNum.indexOf('.') !== -1) {
+                        fixedNum = fixedNum.replace(/\.?0+$/, "");
+                    }
+                    return fixedNum;
                 }
                 return match;
             });
@@ -73,10 +78,10 @@
                 reader.onload = function(event) {
                     let content = event.target.result;
 
-                    // 1. Adım: Önce e+002 şeklindeki bilimsel sayıları tespit edip düzeltiyoruz
+                    // 1. Adım: Bilimsel sayıları saf metin olarak genişlet (Araya hiç virgül karışmaz)
                     content = convertScientificNotation(content);
 
-                    // 2. Adım: İlk koddaki karakter dönüşüm mantığı (; -> , ve , -> .)
+                    // 2. Adım: Karakter dönüşüm mantığı (; -> , ve , -> .)
                     content = content.replace(/,/g, '[TEMP_COMMA]');
                     content = content.replace(/;/g, ',');
                     content = content.replace(/\[TEMP_COMMA\]/g, '.');
@@ -88,7 +93,7 @@
 
                     processedFiles.push({ url: url, name: newFileName });
 
-                    // Arayüze kavisli kare (kart) ekleme
+                    // Arayüze kart ekleme
                     const card = document.createElement('div');
                     card.className = 'file-card';
                     card.innerHTML = `
