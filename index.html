@@ -38,7 +38,7 @@
     <script>
         let processedFiles = [];
 
-        // Hücre içindeki bilimsel sayıları sütun yapısını bozmadan dönüştüren fonksiyon
+        // Hücre içindeki bilimsel sayıları ondalık kısımlarını bozmadan çözen fonksiyon
         function processCell(cellValue) {
             let trimmed = cellValue.trim();
             
@@ -47,14 +47,21 @@
                 let num = Number(trimmed);
                 if (!isNaN(num) && isFinite(num)) {
                     let parts = trimmed.toLowerCase().split('e');
-                    let exponent = parseInt(parts, 10);
-                    let decimalPlaces = parts.includes('.') ? parts.split('.').length : 0;
+                    let exponent = parseInt(parts[1], 10);
                     
+                    // Ondalık hane sayısını doğru bulmak için noktadan sonrasını alıyoruz
+                    let decimalPlaces = 0;
+                    if (parts[0].includes('.')) {
+                        decimalPlaces = parts[0].split('.')[1].length;
+                    }
+                    
+                    // Ondalık kısmın silinmesini engelleyen net hedef basamak hesabı
                     let targetPrecision = Math.max(0, decimalPlaces - exponent);
                     let fixedNum = num.toFixed(targetPrecision);
                     
+                    // Eğer sayı ondalıklıysa ve eksik sıfır varsa sonuna tamamlar (8.305560 koruması)
                     if (fixedNum.indexOf('.') !== -1 && targetPrecision > 0) {
-                        let currentDecimals = fixedNum.split('.').length;
+                        let currentDecimals = fixedNum.split('.')[1].length;
                         if (currentDecimals < targetPrecision) {
                             fixedNum = fixedNum.padEnd(fixedNum.length + (targetPrecision - currentDecimals), '0');
                         }
@@ -63,7 +70,7 @@
                 }
             }
             
-            // Kullanıcının hücre içi karakter dönüşüm kuralları
+            // Sizin istediğiniz karakter dönüşüm kuralları:
             trimmed = trimmed.replace(/,/g, '.');
             trimmed = trimmed.replace(/;/g, ',');
             
@@ -107,15 +114,14 @@
                         let columns = currentLine.split(detectedDelimiter);
                         let processedColumns = columns.map(cell => processCell(cell));
 
-                        // Sütunları virgül (,) ile birleştiriyoruz
+                        // Sütunların arasına yapışma olmasın diye yeni standart CSV ayırıcısı olan virgülü koyuyoruz
                         processedLines.push(processedColumns.join(','));
                     }
 
-                    // "sep=," satırı tamamen kaldırıldı, veri doğrudan ilk satırdan başlıyor
                     let content = processedLines.join('\n');
 
-                    // Dosya oluşturma (UTF-8 BOM ekleyerek Excel'in Türkçe karakterleri ve sütunları doğrudan tanımasını kolaylaştırıyoruz)
-                    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], { type: 'text/csv;charset=utf-8;' });
+                    // Bozuk karakterlere yol açan tüm eklemeleri kaldırdık, saf metin olarak kaydediyoruz
+                    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     processedFiles.push({ url: url, name: "donusturulmus_" + file.name });
 
