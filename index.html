@@ -3,58 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Karakter Dönüştürücü</title>
+    <title>Çoklu CSV Karakter Dönüştürücü</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; }
-        .box { border: 2px dashed #ccc; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; }
-        .btn { display: inline-block; background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; margin-top: 20px; font-weight: bold; }
-        .btn:hover { background: #0056b3; }
-        #downloadArea { display: none; margin-top: 20px; }
+        body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
+        .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
+        .box:hover { background: #f0f7ff; }
+        
+        /* Kavisli Kare Dosya Kartları Alanı */
+        .file-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 25px; }
+        .file-card { background: #ffffff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 15px; width: 120px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); animation: fadeIn 0.3s ease; }
+        .file-icon { font-size: 24px; margin-bottom: 5px; }
+        .file-name { font-size: 11px; font-weight: bold; word-break: break-all; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+        
+        .btn { display: inline-block; background: #28a745; color: white; padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; margin-top: 25px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(40,167,69,0.2); display: none; }
+        .btn:hover { background: #218838; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <h2>CSV Karakter Dönüştürücü</h2>
-    <p>Dosyanızdaki <b>;</b> karakterlerini <b>,</b> karakterine; <b>,</b> karakterlerini ise <b>.</b> karakterine dönüştürür.</p>
+    <h2>Çoklu CSV Karakter Dönüştürücü</h2>
+    <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b> karakterine; <b>,</b> karakterlerini ise <b>.</b> karakterine dönüştürür.</p>
 
+    <!-- Çoklu dosya seçimi için "multiple" özelliği eklendi -->
     <div class="box" onclick="document.getElementById('fileInput').click()">
-        <p>CSV dosyasını seçmek için buraya tıklayın</p>
-        <input type="file" id="fileInput" accept=".csv,.txt" style="display:none">
+        <p>CSV dosyalarını seçmek için tıklayın<br><small style="color: #666;">(Birden fazla dosya seçebilirsiniz)</small></p>
+        <input type="file" id="fileInput" accept=".csv,.txt" multiple style="display:none">
     </div>
 
-    <div id="downloadArea">
-        <p>✅ Dosyanız başarıyla dönüştürüldü!</p>
-        <a id="downloadBtn" class="btn" download="donusturulmus_dosya.csv">Yeni CSV Dosyasını İndir</a>
-    </div>
+    <!-- Yüklenen dosyaların görüneceği kavisli kareler -->
+    <div class="file-list" id="fileList"></div>
+
+    <!-- Hepsini tek seferde indirecek buton -->
+    <button id="downloadAllBtn" class="btn">Hepsini İndir</button>
 
     <script>
+        // Dönüştürülen dosyaların indirme linklerini ve isimlerini tutacak dizi
+        let processedFiles = [];
+
         document.getElementById('fileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = e.target.files;
+            if (files.length === 0) return;
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                let content = event.target.result;
+            const fileListContainer = document.getElementById('fileList');
+            const downloadAllBtn = document.getElementById('downloadAllBtn');
+            
+            // Yeni yüklemede listeyi temizle
+            fileListContainer.innerHTML = "";
+            processedFiles = [];
 
-                // Dönüşüm Mantığı: 
-                // Önce geçici bir sembole (örn: [TEMP_COMMA]) virgülleri aktarıyoruz ki karışmasınlar.
-                // Sonra ; karakterlerini , yapıyoruz.
-                // En son geçici semboldeki eski virgülleri . yapıyoruz.
-                content = content.replace(/,/g, '[TEMP_COMMA]');
-                content = content.replace(/;/g, ',');
-                content = content.replace(/\[TEMP_COMMA\]/g, '.');
-
-                // İndirme butonunu hazırlama
-                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const downloadBtn = document.getElementById('downloadBtn');
+            // Seçilen her bir dosyayı sırayla işle
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
                 
-                downloadBtn.href = url;
-                downloadBtn.download = "donusturulmus_" + file.name;
+                reader.onload = function(event) {
+                    let content = event.target.result;
+
+                    // İlk koddaki dönüşüm mantığı
+                    content = content.replace(/,/g, '[TEMP_COMMA]');
+                    content = content.replace(/;/g, ',');
+                    content = content.replace(/\[TEMP_COMMA\]/g, '.');
+
+                    // Dosya için indirme URL'si oluşturma
+                    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const newFileName = "donusturulmus_" + file.name;
+
+                    // Listeye eklemek üzere veriyi sakla
+                    processedFiles.push({ url: url, name: newFileName });
+
+                    // Arayüze kavisli kare (kart) ekleme
+                    const card = document.createElement('div');
+                    card.className = 'file-card';
+                    card.innerHTML = `
+                        <div class="file-icon">📄</div>
+                        <div class="file-name" title="${file.name}">${file.name}</div>
+                    `;
+                    fileListContainer.appendChild(card);
+
+                    // En az bir dosya işlendiyse indirme butonunu göster
+                    if (processedFiles.length > 0) {
+                        downloadAllBtn.style.display = 'inline-block';
+                    }
+                };
                 
-                document.getElementById('downloadArea').style.display = 'block';
-            };
-            reader.readAsText(file);
+                reader.readAsText(file);
+            });
+        });
+
+        // "Hepsini İndir" butonuna tıklandığında çalışan fonksiyon
+        document.getElementById('downloadAllBtn').addEventListener('click', function() {
+            processedFiles.forEach((fileInfo, index) => {
+                // Tarayıcıların ardışık indirmeleri engellememesi için küçük bir zaman gecikmesi (delay) ekliyoruz
+                setTimeout(() => {
+                    const a = document.createElement('a');
+                    a.href = fileInfo.url;
+                    a.download = fileInfo.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }, index * 250); // Her dosya arasında 0.25 saniye bekler
+            });
         });
     </script>
 
