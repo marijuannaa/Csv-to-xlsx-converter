@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çoklu CSV Karakter Dönüştürücü</title>
+    <title>Çoklu CSV Karakter ve Sayı Dönüştürücü</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; color: #333; }
         .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; transition: 0.2s; }
@@ -23,10 +23,10 @@
 </head>
 <body>
 
-    <h2>Çoklu CSV Karakter Dönüştürücü</h2>
-    <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b> karakterine; <b>,</b> karakterlerini ise <b>.</b> karakterine dönüştürür.</p>
+    <h2>Çoklu CSV Dönüştürücü</h2>
+    <p>Dosyalarınızdaki <b>;</b> karakterlerini <b>,</b>; eski <b>,</b> karakterlerini ise <b>.</b> yapar.<br>
+    Ayrıca <b>5.992711e+002</b> tarzı bilimsel sayıları normal sayı formatına dönüştürür.</p>
 
-    <!-- Çoklu dosya seçimi için "multiple" özelliği eklendi -->
     <div class="box" onclick="document.getElementById('fileInput').click()">
         <p>CSV dosyalarını seçmek için tıklayın<br><small style="color: #666;">(Birden fazla dosya seçebilirsiniz)</small></p>
         <input type="file" id="fileInput" accept=".csv,.txt" multiple style="display:none">
@@ -39,8 +39,23 @@
     <button id="downloadAllBtn" class="btn">Hepsini İndir</button>
 
     <script>
-        // Dönüştürülen dosyaların indirme linklerini ve isimlerini tutacak dizi
         let processedFiles = [];
+
+        // Bilimsel gösterimli sayıları tespit edip normal sayıya çeviren yardımcı fonksiyon
+        function convertScientificNotation(text) {
+            // E-notasyonu kalıbını arayan düzenli ifade (Örn: 5.99e+02, -1.2e-3 vb.)
+            const scientificRegex = /[-+]?[0-9]*\.?[0-9]+[eE][-+]?[0-9]+/g;
+            
+            return text.replace(scientificRegex, function(match) {
+                const num = Number(match);
+                // Eğer dönüştürülen değer geçerli bir sayıysa ve sonsuz değilse düz metne çevirir
+                if (!isNaN(num) && isFinite(num)) {
+                    // Javascript'in büyük/küçük sayılarda tekrar e+ yazmasını engellemek için doğrudan string kontrolü
+                    return num.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+                }
+                return match;
+            });
+        }
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const files = e.target.files;
@@ -49,28 +64,28 @@
             const fileListContainer = document.getElementById('fileList');
             const downloadAllBtn = document.getElementById('downloadAllBtn');
             
-            // Yeni yüklemede listeyi temizle
             fileListContainer.innerHTML = "";
             processedFiles = [];
 
-            // Seçilen her bir dosyayı sırayla işle
             Array.from(files).forEach(file => {
                 const reader = new FileReader();
                 
                 reader.onload = function(event) {
                     let content = event.target.result;
 
-                    // İlk koddaki dönüşüm mantığı
+                    // 1. Adım: Önce e+002 şeklindeki bilimsel sayıları tespit edip düzeltiyoruz
+                    content = convertScientificNotation(content);
+
+                    // 2. Adım: İlk koddaki karakter dönüşüm mantığı (; -> , ve , -> .)
                     content = content.replace(/,/g, '[TEMP_COMMA]');
                     content = content.replace(/;/g, ',');
                     content = content.replace(/\[TEMP_COMMA\]/g, '.');
 
-                    // Dosya için indirme URL'si oluşturma
+                    // Dosya indirme URL'si oluşturma
                     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const newFileName = "donusturulmus_" + file.name;
 
-                    // Listeye eklemek üzere veriyi sakla
                     processedFiles.push({ url: url, name: newFileName });
 
                     // Arayüze kavisli kare (kart) ekleme
@@ -82,7 +97,6 @@
                     `;
                     fileListContainer.appendChild(card);
 
-                    // En az bir dosya işlendiyse indirme butonunu göster
                     if (processedFiles.length > 0) {
                         downloadAllBtn.style.display = 'inline-block';
                     }
@@ -92,10 +106,9 @@
             });
         });
 
-        // "Hepsini İndir" butonuna tıklandığında çalışan fonksiyon
+        // "Hepsini İndir" butonu tetikleyicisi
         document.getElementById('downloadAllBtn').addEventListener('click', function() {
             processedFiles.forEach((fileInfo, index) => {
-                // Tarayıcıların ardışık indirmeleri engellememesi için küçük bir zaman gecikmesi (delay) ekliyoruz
                 setTimeout(() => {
                     const a = document.createElement('a');
                     a.href = fileInfo.url;
@@ -103,7 +116,7 @@
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-                }, index * 250); // Her dosya arasında 0.25 saniye bekler
+                }, index * 250);
             });
         });
     </script>
