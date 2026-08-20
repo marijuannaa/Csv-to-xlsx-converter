@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Karakter Dönüştürücü</title>
+    <title>CSV'den XLSX Excel Dönüştürücü</title>
+    <!-- Excel dosyası oluşturmak için SheetJS (XLSX) kütüphanesini ekliyoruz -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; line-height: 1.6; text-align: center; }
-        .box { border: 2px dashed #ccc; padding: 30px; border-radius: 10px; background: #fafafa; cursor: pointer; }
-        .btn { display: inline-block; background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; margin-top: 20px; font-weight: bold; }
-        .btn:hover { background: #0056b3; }
+        .box { border: 2px dashed #007bff; padding: 30px; border-radius: 10px; background: #f4f9ff; cursor: pointer; transition: 0.3s; }
+        .box:hover { background: #e6f2ff; border-color: #0056b3; }
+        .btn { display: inline-block; background: #28a745; color: white; padding: 12px 25px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; margin-top: 20px; font-weight: bold; font-size: 16px; }
+        .btn:hover { background: #218838; }
         #downloadArea { display: none; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <h2>CSV Karakter Dönüştürücü</h2>
-    <p>Dosyanızdaki <b>;</b> karakterlerini <b>,</b> karakterine; <b>,</b> karakterlerini ise <b>.</b> karakterine dönüştürür.</p>
+    <h2>CSV'den Excel (.XLSX) Dönüştürücü</h2>
+    <p>Dosyanızdaki <b>;</b> karakterlerini <b>,</b> yapar; eski <b>,</b> karakterlerini ise <b>.</b> yapar ve gerçek Excel dosyası olarak indirir.</p>
 
     <div class="box" onclick="document.getElementById('fileInput').click()">
         <p>CSV dosyasını seçmek için buraya tıklayın</p>
@@ -23,38 +26,54 @@
     </div>
 
     <div id="downloadArea">
-        <p>✅ Dosyanız başarıyla dönüştürüldü!</p>
-        <a id="downloadBtn" class="btn" download="donusturulmus_dosya.csv">Yeni CSV Dosyasını İndir</a>
+        <p>🎉 Dosyanız Excel formatına başarıyla dönüştürüldü!</p>
+        <button id="downloadBtn" class="btn">Excel (.xlsx) Olarak İndir</button>
     </div>
 
     <script>
+        let generatedWorkbook = null;
+        let originalFileName = "dosya.xlsx";
+
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
+            originalFileName = file.name.replace(/\.[^/.]+$/, "") + ".xlsx";
             const reader = new FileReader();
+
             reader.onload = function(event) {
                 let content = event.target.result;
 
-                // Dönüşüm Mantığı: 
-                // Önce geçici bir sembole (örn: [TEMP_COMMA]) virgülleri aktarıyoruz ki karışmasınlar.
-                // Sonra ; karakterlerini , yapıyoruz.
-                // En son geçici semboldeki eski virgülleri . yapıyoruz.
+                // Karakter Dönüşüm Mantığı
                 content = content.replace(/,/g, '[TEMP_COMMA]');
                 content = content.replace(/;/g, ',');
                 content = content.replace(/\[TEMP_COMMA\]/g, '.');
 
-                // İndirme butonunu hazırlama
-                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const downloadBtn = document.getElementById('downloadBtn');
-                
-                downloadBtn.href = url;
-                downloadBtn.download = "donusturulmus_" + file.name;
-                
+                // Satırları ayırıp Excel tablosu (Array of Arrays) yapısına çeviriyoruz
+                const rows = content.split(/\r?\n/);
+                const dataArray = rows.map(row => {
+                    // Boş satırları atlamak veya bölmek için kontrol
+                    if(row.trim() === "") return [];
+                    return row.split(',');
+                }).filter(row => row.length > 0);
+
+                // SheetJS kullanarak yeni bir Excel çalışma kitabı oluşturuyoruz
+                const worksheet = XLSX.utils.aoa_to_sheet(dataArray);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Dönüştürülen Veri");
+
+                // İndirme butonunu tetiklemek için nesneyi hafızada tutuyoruz
+                generatedWorkbook = workbook;
                 document.getElementById('downloadArea').style.display = 'block';
             };
             reader.readAsText(file);
+        });
+
+        // İndirme butonuna tıklandığında dosyayı bilgisayara kaydeder
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            if (generatedWorkbook) {
+                XLSX.writeFile(generatedWorkbook, "donusturulmus_" + originalFileName);
+            }
         });
     </script>
 
